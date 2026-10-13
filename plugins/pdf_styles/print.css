@@ -64,6 +64,7 @@
 }
 
 .toc-page h2 {
+    bookmark-level: 1;
     font-size: 18pt;
     margin-bottom: 1em;
     color: #333;
@@ -97,8 +98,11 @@
 }
 
 /* Chapters */
+/* Each chapter is one top-level bookmark; its headings nest beneath it */
 .chapter {
     page-break-before: always;
+    bookmark-level: 1;
+    bookmark-label: attr(data-title);
 }
 
 .chapter:first-of-type {
@@ -109,8 +113,19 @@
     font-size: 20pt;
     margin-bottom: 1em;
     color: #333;
-    bookmark-level: 1;
-    bookmark-label: content();
+}
+
+.chapter h1 { bookmark-level: 2; }
+.chapter h2 { bookmark-level: 3; }
+.chapter h3 { bookmark-level: 4; }
+.chapter h4 { bookmark-level: 5; }
+
+/* The chapter's own title block is already covered by the chapter bookmark */
+.chapter h5,
+.chapter h6,
+.chapter .chapter-title,
+.chapter [data-pdf-title] {
+    bookmark-level: none;
 }
 
 /* General Typography */

@@ -180,6 +180,9 @@ class PdfPlugin(Plugin):
             link_targets = {xhtml_path.relative_to(oebps).as_posix(): chapter_id}
             body = self._extract_chapter_body(xhtml_path, oebps, link_targets)
             chapter_title = self._escape_html(chapter.get("title", f"Chapter {i+1}"))
+            section_html = self._chapter_section_html(
+                chapter_id, chapter.get("title", f"Chapter {i+1}"), body
+            )
 
             chapter_html = f'''<!DOCTYPE html>
 <html>
@@ -190,10 +193,7 @@ class PdfPlugin(Plugin):
     <style>{original_css}</style>
 </head>
 <body>
-    <section class="chapter" id="{chapter_id}">
-        <h1 class="chapter-title">{chapter_title}</h1>
-        {body}
-    </section>
+    {section_html}
 </body>
 </html>'''
 
@@ -251,13 +251,9 @@ class PdfPlugin(Plugin):
                 toc_id = chapter_id
                 continue
 
-            chapter_title = self._escape_html(chapter.get("title", ""))
-
-            chapters_html_parts.append(f'''
-    <section class="chapter" id="{chapter_id}">
-        <h1 class="chapter-title">{chapter_title}</h1>
-        {body}
-    </section>''')
+            chapters_html_parts.append(
+                self._chapter_section_html(chapter_id, chapter.get("title", ""), body)
+            )
 
         cover_html = self._generate_cover_html(book_info, cover_image, cover_id)
         toc_html = self._generate_toc_html(toc, chapters, toc_id)
@@ -279,6 +275,68 @@ class PdfPlugin(Plugin):
     {chapters_html}
 </body>
 </html>'''
+
+    _LEADING_MARKUP = re.compile(
+        r'(?:\s+|</?(?:div|section|header|hgroup|a|span)\b[^>]*>)*',
+        re.IGNORECASE,
+    )
+    _HEADING = re.compile(r'<(h[1-6])\b([^>]*)>(.*?)</\1>', re.DOTALL | re.IGNORECASE)
+
+    def _chapter_section_html(self, chapter_id: str, title: str, body: str) -> str:
+        """
+        Wrap a chapter body in its <section>.
+
+        The section carries the chapter's bookmark. If the body already opens
+        with the chapter title, those opening headings are kept as the visible
+        title and excluded from the bookmarks; otherwise a title is added.
+        """
+        marked_body = self._mark_title_headings(body, title)
+        if marked_body is None:
+            heading = f'<h1 class="chapter-title">{self._escape_html(title)}</h1>'
+            marked_body = body
+        else:
+            heading = ""
+
+        return f'''
+    <section class="chapter" id="{chapter_id}" data-title="{self._escape_html(title)}">
+        {heading}
+        {marked_body}
+    </section>'''
+
+    def _mark_title_headings(self, body: str, title: str) -> str | None:
+        """
+        Mark the headings that open a chapter body as its title block.
+
+        Returns None if the body does not open with the chapter title.
+        """
+        headings = []
+        pos = self._LEADING_MARKUP.match(body).end()
+        while match := self._HEADING.match(body, pos):
+            headings.append(match)
+            pos = self._LEADING_MARKUP.match(body, match.end()).end()
+
+        wanted = self._normalize_title(title)
+        if not wanted or not any(
+            self._same_title(self._normalize_title(m.group(3)), wanted) for m in headings
+        ):
+            return None
+
+        for match in reversed(headings):
+            insert_at = match.start() + len(match.group(1)) + 1
+            body = f'{body[:insert_at]} data-pdf-title="true"{body[insert_at:]}'
+        return body
+
+    def _normalize_title(self, text: str) -> str:
+        """Reduce heading markup or a title to comparable plain text."""
+        text = html.unescape(re.sub(r'<[^>]+>', '', text or ""))
+        return " ".join(text.replace("\u2019", "'").split()).casefold()
+
+    def _same_title(self, heading: str, title: str) -> bool:
+        """Whether a heading shows the chapter title, allowing a prefix such as "1. "."""
+        if heading == title:
+            return True
+        shorter, longer = sorted((heading, title), key=len)
+        return len(shorter) >= 4 and shorter in longer
 
     def _generate_cover_html(
         self,
@@ -492,14 +550,19 @@ class PdfPlugin(Plugin):
 .toc-page ul { list-style: none; padding: 0; }
 .toc-page li { margin: 0.5em 0; }
 .toc-page a { color: #000; text-decoration: none; }
-.chapter { page-break-before: always; }
-.chapter:first-of-type { page-break-before: auto; }
-.chapter-title {
-    font-size: 20pt;
-    margin-bottom: 1em;
+.toc-page h2 { bookmark-level: 1; }
+.chapter {
+    page-break-before: always;
     bookmark-level: 1;
-    bookmark-label: content();
+    bookmark-label: attr(data-title);
 }
+.chapter:first-of-type { page-break-before: auto; }
+.chapter-title { font-size: 20pt; margin-bottom: 1em; }
+.chapter h1 { bookmark-level: 2; }
+.chapter h2 { bookmark-level: 3; }
+.chapter h3 { bookmark-level: 4; }
+.chapter h4 { bookmark-level: 5; }
+.chapter h5, .chapter h6, .chapter .chapter-title, .chapter [data-pdf-title] { bookmark-level: none; }
 img { max-width: 100%; height: auto; }
 figure { page-break-inside: avoid; }
 pre, code {
