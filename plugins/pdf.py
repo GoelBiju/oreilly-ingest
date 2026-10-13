@@ -570,6 +570,7 @@ class PdfPlugin(Plugin):
 .toc-page ul { list-style: none; padding: 0; }
 .toc-page li { margin: 0.5em 0; }
 .toc-page a { color: #000; text-decoration: none; }
+.toc-page a::after { content: leader(dotted) target-counter(attr(href), page); }
 .toc-page h2 { bookmark-level: 1; }
 .chapter {
     page-break-before: always;

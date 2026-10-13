@@ -97,6 +97,10 @@
     text-decoration: underline;
 }
 
+.toc-page a::after {
+    content: leader(dotted) target-counter(attr(href), page);
+}
+
 /* Chapters */
 /* Each chapter is one top-level bookmark; its headings nest beneath it */
 .chapter {
