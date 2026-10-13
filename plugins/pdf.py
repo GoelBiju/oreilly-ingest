@@ -539,10 +539,18 @@ class PdfPlugin(Plugin):
             if css_path.exists():
                 # The CSS is inlined into the document, so url() references
                 # relative to Styles/ must be re-anchored to OEBPS.
-                css_parts.append(re.sub(
+                css = re.sub(
                     r'url\(\s*(["\']?)([^)"\']+)\1\s*\)',
                     lambda m: f'url("{self._rebase_url(m.group(2).strip(), "Styles")}")',
                     css_path.read_text(encoding="utf-8"),
+                )
+                # Book stylesheets are written for screens and may set their
+                # own page margins (e.g. "@page{margin:5px !important}"),
+                # which would override the print layout.
+                css_parts.append(re.sub(
+                    r'@page\b[^{}]*\{(?:[^{}]|\{[^{}]*\})*\}',
+                    '',
+                    css,
                 ))
 
         return "\n".join(css_parts)
