@@ -3,6 +3,8 @@
 import html
 import posixpath
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -130,6 +132,8 @@ class PdfPlugin(Plugin):
             cover_image=cover_image,
         )
 
+        self.report_fonts(oebps, css_files)
+
         title = book_info.get("title", "book")
         safe_title = sanitize_filename(title)
         pdf_path = output_dir / f"{safe_title}.pdf"
@@ -171,6 +175,8 @@ class PdfPlugin(Plugin):
         original_css = self._load_css_files(oebps, css_files)
 
         author_meta = self._author_meta_html(book_info)
+
+        self.report_fonts(oebps, css_files)
 
         pdf_paths = []
 
@@ -563,6 +569,108 @@ class PdfPlugin(Plugin):
                 css_parts.append(css)
 
         return "\n".join(css_parts)
+
+    _GENERIC_FONTS = frozenset([
+        "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+        "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "emoji", "fangsong",
+    ])
+    _FONT_KEYWORDS = frozenset(["inherit", "initial", "unset", "revert"])
+
+    def check_fonts(self, oebps: Path, css_files: list[str]) -> list[dict]:
+        """
+        Work out which installed font each font-family list in the PDF's CSS resolves to.
+
+        Books name the fonts they want but rarely ship them, so the PDF is
+        rendered with whatever the machine has. Returns one dict per distinct
+        font-family list with:
+            requested: the family names in the order the CSS lists them
+            resolved:  the installed family that will be used
+            status:    "ok" (a named font is installed), "substituted" (an
+                       alias maps a named font to an installed one),
+                       "generic" (only generic names were requested) or
+                       "fallback" (no named font is available)
+
+        Returns an empty list if fontconfig's fc-match is not available.
+        """
+        if not shutil.which("fc-match"):
+            return []
+
+        css = self._get_print_css() + "\n" + self._load_css_files(oebps, css_files)
+
+        stacks = []
+        for value in re.findall(r'font-family\s*:\s*([^;}]+)', css, re.IGNORECASE):
+            value = re.sub(r'!\s*important', '', value, flags=re.IGNORECASE)
+            names = tuple(
+                name for name in (part.strip().strip('"\'').strip() for part in value.split(","))
+                if name
+            )
+            if not names or names[0].lower() in self._FONT_KEYWORDS or names in stacks:
+                continue
+            stacks.append(names)
+
+        cache: dict[tuple[str, ...], str] = {}
+
+        def resolve(names: tuple[str, ...]) -> str:
+            if names not in cache:
+                # Commas separate families in a fontconfig pattern, so the
+                # whole list is matched the way the renderer matches it.
+                pattern = ",".join(re.sub(r'([\\:,-])', r'\\\1', name) for name in names)
+                result = subprocess.run(
+                    ["fc-match", "-f", "%{family[0]}", pattern],
+                    capture_output=True, text=True, timeout=10,
+                )
+                cache[names] = result.stdout.strip()
+            return cache[names]
+
+        report = []
+        for names in stacks:
+            # Names listed after a generic family are never reached.
+            first_generic = next(
+                (i for i, n in enumerate(names) if n.lower() in self._GENERIC_FONTS),
+                len(names),
+            )
+            named = names[:first_generic]
+            generic = names[first_generic:first_generic + 1]
+            resolved = resolve(names)
+
+            if not named:
+                status = "generic"
+            elif resolved.lower() in (n.lower() for n in named):
+                status = "ok"
+            elif resolved != resolve(generic or ("",)):
+                status = "substituted"
+            else:
+                status = "fallback"
+
+            report.append({"requested": list(names), "resolved": resolved, "status": status})
+
+        return report
+
+    def report_fonts(self, oebps: Path, css_files: list[str]) -> list[dict]:
+        """Print which fonts the PDF will use, flagging requests no installed font satisfies."""
+        try:
+            report = self.check_fonts(oebps, css_files)
+        except Exception as e:
+            # Font availability only affects appearance; never fail a PDF over it.
+            print(f"[pdf] font check skipped: {e}")
+            return []
+
+        if not report:
+            print("[pdf] font check skipped: fc-match not found")
+            return report
+
+        for entry in report:
+            requested = ", ".join(entry["requested"])
+            if entry["status"] == "fallback":
+                print(f"[pdf] WARNING no requested font installed: {requested} -> using {entry['resolved']}")
+            else:
+                print(f"[pdf] font ({entry['status']}): {requested} -> {entry['resolved']}")
+
+        missing = sum(1 for entry in report if entry["status"] == "fallback")
+        if missing:
+            print(f"[pdf] {missing}/{len(report)} font requests fell back to a default font")
+
+        return report
 
     def _get_print_css(self) -> str:
         """Return print-specific CSS for PDF generation."""
