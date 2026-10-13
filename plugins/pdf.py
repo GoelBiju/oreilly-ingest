@@ -367,15 +367,30 @@ class PdfPlugin(Plugin):
         # Links between chapter files (e.g. "ch02.xhtml#sec1") would resolve to
         # file:// URLs. The chapters are merged into one document, so point
         # them at the in-document anchor instead.
+        def rewrite_link(m: re.Match) -> str:
+            url = self._internal_link(m.group(4), chapter_dir, link_targets)
+            if url is None:
+                return m.group(1)
+            return f"{m.group(1)}{m.group(2)}{m.group(3)}{url}{m.group(3)}"
+
         return re.sub(
-            r'(<a\b[^>]*?\shref=)(["\'])(.*?)\2',
-            lambda m: f"{m.group(1)}{m.group(2)}{self._internal_link(m.group(3), chapter_dir, link_targets)}{m.group(2)}",
+            r'(<a\b[^>]*?)(\shref=)(["\'])(.*?)\3',
+            rewrite_link,
             body,
             flags=re.DOTALL | re.IGNORECASE,
         )
 
-    def _internal_link(self, url: str, from_dir: str, link_targets: dict[str, str]) -> str:
-        """Rewrite a link to a chapter file as an in-document anchor."""
+    def _internal_link(self, url: str, from_dir: str, link_targets: dict[str, str]) -> str | None:
+        """
+        Rewrite a link to a chapter file as an in-document anchor.
+
+        Returns None when the link has no usable destination in a PDF and its
+        href should be dropped.
+        """
+        # An empty href would resolve to the document's base URL, leaving a
+        # file:// link to the output directory in the PDF.
+        if not url.strip():
+            return None
         if re.match(r'^([a-z][a-z0-9+.-]*:|/|#)', url, re.IGNORECASE):
             return url
         path, _, fragment = url.partition("#")
