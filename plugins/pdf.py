@@ -5,6 +5,7 @@ import posixpath
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 from utils.files import sanitize_filename
 
@@ -175,7 +176,9 @@ class PdfPlugin(Plugin):
             if not xhtml_path.exists():
                 continue
 
-            body = self._extract_chapter_body(xhtml_path, oebps)
+            chapter_id = Path(chapter["filename"]).stem
+            link_targets = {xhtml_path.relative_to(oebps).as_posix(): chapter_id}
+            body = self._extract_chapter_body(xhtml_path, oebps, link_targets)
             chapter_title = self._escape_html(chapter.get("title", f"Chapter {i+1}"))
 
             chapter_html = f'''<!DOCTYPE html>
@@ -187,7 +190,7 @@ class PdfPlugin(Plugin):
     <style>{original_css}</style>
 </head>
 <body>
-    <section class="chapter">
+    <section class="chapter" id="{chapter_id}">
         <h1 class="chapter-title">{chapter_title}</h1>
         {body}
     </section>
@@ -225,13 +228,17 @@ class PdfPlugin(Plugin):
         toc_html = self._generate_toc_html(toc, chapters)
 
         chapters_html_parts = []
+        link_targets = {
+            posixpath.normpath(ch["filename"].replace(".html", ".xhtml")): Path(ch["filename"]).stem
+            for ch in chapters
+        }
 
         for chapter in chapters:
             xhtml_path = oebps / chapter["filename"].replace(".html", ".xhtml")
             if not xhtml_path.exists():
                 continue
 
-            body = self._extract_chapter_body(xhtml_path, oebps)
+            body = self._extract_chapter_body(xhtml_path, oebps, link_targets)
             chapter_id = Path(chapter["filename"]).stem
             chapter_title = self._escape_html(chapter.get("title", ""))
 
@@ -300,8 +307,8 @@ class PdfPlugin(Plugin):
                 # Extract filename from reference like "urn:orm:book:123/-/ch001.html"
                 if "-/" in href:
                     href = href.split("-/")[-1]
-                chapter_id = Path(href).stem
-                link = f'<a href="#{chapter_id}">{title}</a>'
+                anchor = item.get("fragment") or Path(href).stem
+                link = f'<a href="#{self._escape_html(anchor)}">{title}</a>'
             else:
                 link = title
 
@@ -323,8 +330,18 @@ class PdfPlugin(Plugin):
         <ul>{toc_items}</ul>
     </section>'''
 
-    def _extract_chapter_body(self, xhtml_path: Path, oebps: Path) -> str:
-        """Extract body content from XHTML file, with URLs relative to OEBPS."""
+    def _extract_chapter_body(
+        self,
+        xhtml_path: Path,
+        oebps: Path,
+        link_targets: dict[str, str],
+    ) -> str:
+        """
+        Extract body content from XHTML file, with URLs relative to OEBPS.
+
+        link_targets maps chapter paths (relative to OEBPS) included in the
+        document being built to the id of their <section>.
+        """
         content = xhtml_path.read_text(encoding="utf-8")
 
         # Find <body> content
@@ -340,12 +357,32 @@ class PdfPlugin(Plugin):
         # assets as "../Images/x.png". The combined document is rendered with
         # OEBPS as its base, so re-anchor those references to OEBPS.
         chapter_dir = xhtml_path.parent.relative_to(oebps).as_posix()
-        return re.sub(
+        body = re.sub(
             r'(<img\b[^>]*?\ssrc=)(["\'])(.*?)\2',
             lambda m: f"{m.group(1)}{m.group(2)}{self._rebase_url(m.group(3), chapter_dir)}{m.group(2)}",
             body,
             flags=re.DOTALL | re.IGNORECASE,
         )
+
+        # Links between chapter files (e.g. "ch02.xhtml#sec1") would resolve to
+        # file:// URLs. The chapters are merged into one document, so point
+        # them at the in-document anchor instead.
+        return re.sub(
+            r'(<a\b[^>]*?\shref=)(["\'])(.*?)\2',
+            lambda m: f"{m.group(1)}{m.group(2)}{self._internal_link(m.group(3), chapter_dir, link_targets)}{m.group(2)}",
+            body,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+    def _internal_link(self, url: str, from_dir: str, link_targets: dict[str, str]) -> str:
+        """Rewrite a link to a chapter file as an in-document anchor."""
+        if re.match(r'^([a-z][a-z0-9+.-]*:|/|#)', url, re.IGNORECASE):
+            return url
+        path, _, fragment = url.partition("#")
+        target = posixpath.normpath(posixpath.join(from_dir, unquote(path)))
+        if target not in link_targets:
+            return url
+        return f"#{fragment or link_targets[target]}"
 
     def _rebase_url(self, url: str, from_dir: str) -> str:
         """Rewrite a URL relative to OEBPS/from_dir so it is relative to OEBPS."""
