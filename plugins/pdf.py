@@ -480,11 +480,12 @@ class PdfPlugin(Plugin):
 }
 .cover-page {
     page-break-after: always;
+    page-break-inside: avoid;
     text-align: center;
-    padding-top: 2in;
+    padding-top: 0.5in;
 }
-.cover-page img { max-width: 100%; max-height: 6in; }
-.cover-page h1 { font-size: 24pt; margin-top: 1in; }
+.cover-page img { max-width: 100%; max-height: 5in; }
+.cover-page h1 { font-size: 24pt; margin-top: 0.6in; }
 .cover-page .authors { font-size: 14pt; color: #333; margin-top: 0.5in; }
 .toc-page { page-break-after: always; }
 .toc-page h2 { font-size: 18pt; margin-bottom: 1em; }

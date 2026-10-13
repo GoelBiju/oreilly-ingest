@@ -26,8 +26,9 @@
 .cover-page {
     page: cover;
     page-break-after: always;
+    page-break-inside: avoid;
     text-align: center;
-    padding-top: 2in;
+    padding-top: 0.5in;
 }
 
 .cover-page img {
@@ -39,7 +40,7 @@
 
 .cover-page h1 {
     font-size: 24pt;
-    margin-top: 1in;
+    margin-top: 0.6in;
     color: #333;
     line-height: 1.2;
 }
