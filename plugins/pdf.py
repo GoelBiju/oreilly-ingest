@@ -236,6 +236,7 @@ class PdfPlugin(Plugin):
         }
         cover_id = None
         toc_id = None
+        has_content_wrapper = False
 
         for chapter in chapters:
             xhtml_path = oebps / chapter["filename"].replace(".html", ".xhtml")
@@ -256,6 +257,18 @@ class PdfPlugin(Plugin):
                 toc_id = chapter_id
                 continue
 
+            # Every chapter is wrapped in a div with the same id. Book styles
+            # are scoped to that id, so it moves to a single wrapper around
+            # all chapters instead of being repeated.
+            body, wrapped = re.subn(
+                r'(<div\b[^>]*?)\sid=(["\'])sbo-rt-content\2',
+                r'\1',
+                body,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            has_content_wrapper = has_content_wrapper or bool(wrapped)
+
             chapters_html_parts.append(
                 self._chapter_section_html(chapter_id, chapter.get("title", ""), body)
             )
@@ -264,6 +277,8 @@ class PdfPlugin(Plugin):
         toc_html = self._generate_toc_html(toc, chapters, toc_id)
 
         chapters_html = "\n".join(chapters_html_parts)
+        if has_content_wrapper:
+            chapters_html = f'<div id="sbo-rt-content">{chapters_html}</div>'
         title = self._escape_html(book_info.get("title", "Untitled"))
 
         return f'''<!DOCTYPE html>
