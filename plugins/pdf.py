@@ -224,6 +224,11 @@ class PdfPlugin(Plugin):
         print_css = self._get_print_css()
         original_css = self._load_css_files(oebps, css_files)
 
+        # The cover is not downloaded when images are skipped or the book has
+        # no cover URL.
+        if cover_image and not (oebps / "Images" / cover_image).exists():
+            cover_image = None
+
         chapters_html_parts = []
         link_targets = {
             posixpath.normpath(ch["filename"].replace(".html", ".xhtml")): Path(ch["filename"]).stem
