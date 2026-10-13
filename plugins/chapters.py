@@ -37,7 +37,20 @@ class ChaptersPlugin(Plugin):
             return data.get("results", [])
         return []
 
-    _FRONT_MATTER_KEYWORDS = ("cover", "halftitle", "titlepage", "title-page", "contents", "toc")
+    # Front matter the TOC usually leaves out, in the order it appears in a book.
+    _FRONT_MATTER_KEYWORDS = (
+        "cover",
+        "praise",
+        "halftitle",
+        "titlepage",
+        "title-page",
+        "copyright",
+        "dedication",
+        "epigraph",
+        "contents",
+        "toc",
+        "foreword",
+    )
 
     def reorder_by_toc(self, chapters: list[ChapterInfo], toc: list[dict]) -> list[ChapterInfo]:
         """Reorder chapters to match the TOC reading order."""
@@ -58,20 +71,26 @@ class ChaptersPlugin(Plugin):
         for ch in chapters:
             if ch["filename"] not in chapter_map:
                 continue
-            if self._is_front_matter(ch):
-                front.append(ch)
+            rank = self._front_matter_rank(ch)
+            if rank is not None:
+                front.append((rank, ch))
             else:
                 back.append(ch)
 
-        return front + ordered + back
+        # The chapter list has no guaranteed order, so front matter is put in
+        # conventional book order rather than the order it was listed in.
+        front.sort(key=lambda item: item[0])
 
-    def _is_front_matter(self, ch: ChapterInfo) -> bool:
+        return [ch for _, ch in front] + ordered + back
+
+    def _front_matter_rank(self, ch: ChapterInfo) -> int | None:
+        """Return the chapter's position among front matter, or None if it is not front matter."""
         filename_lower = ch["filename"].lower()
         title_lower = ch["title"].lower()
-        for keyword in self._FRONT_MATTER_KEYWORDS:
+        for rank, keyword in enumerate(self._FRONT_MATTER_KEYWORDS):
             if keyword in filename_lower or keyword in title_lower:
-                return True
-        return False
+                return rank
+        return None
 
     def fetch_content(self, content_url: str) -> str:
         return self.http.get_text(content_url)
