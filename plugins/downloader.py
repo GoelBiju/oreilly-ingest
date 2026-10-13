@@ -394,8 +394,9 @@ class DownloaderPlugin(Plugin):
                     output_dir=book_dir,
                     css_files=css_list,
                 )
-                result.files["pdf"] = [str(p) for p in pdf_paths]
-            else:
+                result.files["pdf-chapters"] = [str(p) for p in pdf_paths]
+
+            if "pdf" in formats or "all" in formats:
                 report("generating_pdf", 95)
                 pdf_path = pdf_plugin.generate(
                     book_info=book_info,

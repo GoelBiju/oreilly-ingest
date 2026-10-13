@@ -900,12 +900,9 @@ async function pollProgress(cardElement) {
 
             let filesHTML = '';
             if (data.epub) filesHTML += createFileResultHTML('EPUB', data.epub);
-            if (data.pdf) {
-                if (Array.isArray(data.pdf)) {
-                    filesHTML += `<div class="flex items-center gap-3 px-4 py-3 bg-zinc-50 rounded-lg text-sm"><span class="font-medium text-zinc-700 min-w-[70px]">PDF</span><span class="flex-1 font-mono text-xs text-zinc-500 truncate">${data.pdf.length} chapter files</span></div>`;
-                } else {
-                    filesHTML += createFileResultHTML('PDF', data.pdf);
-                }
+            if (data.pdf) filesHTML += createFileResultHTML('PDF', data.pdf);
+            if (data['pdf-chapters']) {
+                filesHTML += `<div class="flex items-center gap-3 px-4 py-3 bg-zinc-50 rounded-lg text-sm"><span class="font-medium text-zinc-700 min-w-[70px]">PDF</span><span class="flex-1 font-mono text-xs text-zinc-500 truncate">${data['pdf-chapters'].length} chapter files</span></div>`;
             }
             if (data.markdown) filesHTML += createFileResultHTML('Markdown', data.markdown);
             if (data.plaintext) filesHTML += createFileResultHTML('Plain Text', data.plaintext);
