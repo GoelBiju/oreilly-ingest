@@ -720,6 +720,11 @@ class PdfPlugin(Plugin):
 .chapter h3 { bookmark-level: 4; }
 .chapter h4 { bookmark-level: 5; }
 .chapter h5, .chapter h6, .chapter .chapter-title, .chapter [data-pdf-title] { bookmark-level: none; }
+sup a, sub a {
+    display: inline-block !important;
+    line-height: 1 !important;
+    margin: -0.25em 0 !important;
+}
 img { max-width: 100%; height: auto; }
 figure { page-break-inside: avoid; }
 pre, code {

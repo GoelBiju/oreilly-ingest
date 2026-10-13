@@ -163,6 +163,22 @@ a {
     text-decoration: none;
 }
 
+/*
+ * Footnote references are links inside <sup>. Book stylesheets commonly give
+ * sup/sub "line-height: 0" so they do not push lines apart, which also makes
+ * the link's clickable area zero height in the PDF: the link is there but
+ * cannot be clicked. Making the link an inline block gives it a real box, and
+ * the negative margin stops that box from moving the line it sits on.
+ * !important is needed because book stylesheets reset every element under
+ * #sbo-rt-content, which outranks a plain rule here.
+ */
+sup a,
+sub a {
+    display: inline-block !important;
+    line-height: 1 !important;
+    margin: -0.25em 0 !important;
+}
+
 /* Images */
 img {
     max-width: 100%;
