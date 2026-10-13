@@ -420,9 +420,9 @@ class PdfPlugin(Plugin):
         Returns None when the link has no usable destination in a PDF and its
         href should be dropped.
         """
-        # An empty href would resolve to the document's base URL, leaving a
-        # file:// link to the output directory in the PDF.
-        if not url.strip():
+        # An empty href or a bare "#" would resolve to the document's base
+        # URL, leaving a file:// link to the output directory in the PDF.
+        if url.strip() in ("", "#"):
             return None
         if re.match(r'^([a-z][a-z0-9+.-]*:|/|#)', url, re.IGNORECASE):
             return url
