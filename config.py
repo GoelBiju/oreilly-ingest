@@ -22,6 +22,14 @@ REQUEST_TIMEOUT = 30
 MAX_RETRIES = 4
 RETRY_BACKOFF = 1.5
 
+# Book stylesheets are written for e-readers, where the reading app adds its
+# own margins, so some set tiny page margins of their own (O'Reilly's uses
+# "@page{margin:5px !important}"). In a PDF nothing else adds margins, so that
+# rule leaves text running to the edge of the page. By default the PDF ignores
+# @page rules from the book and uses the page size and margins from
+# plugins/pdf_styles/print.css. Set to True to keep the book's own rules.
+PDF_USE_BOOK_PAGE_RULES = False
+
 HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     "Accept-Encoding": "gzip, deflate",

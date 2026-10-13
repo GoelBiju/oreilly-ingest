@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote
 
+import config
 from utils.files import sanitize_filename
 
 from .base import Plugin
@@ -548,14 +549,18 @@ class PdfPlugin(Plugin):
                     lambda m: f'url("{self._rebase_url(m.group(2).strip(), "Styles")}")',
                     css_path.read_text(encoding="utf-8"),
                 )
-                # Book stylesheets are written for screens and may set their
-                # own page margins (e.g. "@page{margin:5px !important}"),
-                # which would override the print layout.
-                css_parts.append(re.sub(
-                    r'@page\b[^{}]*\{(?:[^{}]|\{[^{}]*\})*\}',
-                    '',
-                    css,
-                ))
+                # Book stylesheets target e-readers and may set page margins
+                # that only make sense there (O'Reilly's own stylesheet has
+                # "@page{margin:5px !important}"). Left in, that rule beats
+                # the margins in print.css and the text fills the full width
+                # of the page. See config.PDF_USE_BOOK_PAGE_RULES.
+                if not config.PDF_USE_BOOK_PAGE_RULES:
+                    css = re.sub(
+                        r'@page\b[^{}]*\{(?:[^{}]|\{[^{}]*\})*\}',
+                        '',
+                        css,
+                    )
+                css_parts.append(css)
 
         return "\n".join(css_parts)
 
