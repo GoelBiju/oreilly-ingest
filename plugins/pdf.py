@@ -224,14 +224,13 @@ class PdfPlugin(Plugin):
         print_css = self._get_print_css()
         original_css = self._load_css_files(oebps, css_files)
 
-        cover_html = self._generate_cover_html(book_info, cover_image)
-        toc_html = self._generate_toc_html(toc, chapters)
-
         chapters_html_parts = []
         link_targets = {
             posixpath.normpath(ch["filename"].replace(".html", ".xhtml")): Path(ch["filename"]).stem
             for ch in chapters
         }
+        cover_id = None
+        toc_id = None
 
         for chapter in chapters:
             xhtml_path = oebps / chapter["filename"].replace(".html", ".xhtml")
@@ -240,6 +239,18 @@ class PdfPlugin(Plugin):
 
             body = self._extract_chapter_body(xhtml_path, oebps, link_targets)
             chapter_id = Path(chapter["filename"]).stem
+
+            # The book's own cover and contents pages would duplicate the ones
+            # generated here. Leave them out and let the generated page take
+            # over their id so links to them still resolve.
+            kind = self._front_matter_kind(body)
+            if kind == "cover" and cover_image and cover_id is None:
+                cover_id = chapter_id
+                continue
+            if kind == "toc" and toc and toc_id is None:
+                toc_id = chapter_id
+                continue
+
             chapter_title = self._escape_html(chapter.get("title", ""))
 
             chapters_html_parts.append(f'''
@@ -247,6 +258,9 @@ class PdfPlugin(Plugin):
         <h1 class="chapter-title">{chapter_title}</h1>
         {body}
     </section>''')
+
+        cover_html = self._generate_cover_html(book_info, cover_image, cover_id)
+        toc_html = self._generate_toc_html(toc, chapters, toc_id)
 
         chapters_html = "\n".join(chapters_html_parts)
         title = self._escape_html(book_info.get("title", "Untitled"))
@@ -270,6 +284,7 @@ class PdfPlugin(Plugin):
         self,
         book_info: dict,
         cover_image: str | None,
+        section_id: str | None = None,
     ) -> str:
         """Generate HTML for cover page."""
         title = self._escape_html(book_info.get("title", "Untitled"))
@@ -286,14 +301,19 @@ class PdfPlugin(Plugin):
         publisher_html = f'<p class="publisher">{publishers}</p>' if publishers else ""
 
         return f'''
-    <section class="cover-page">
+    <section class="cover-page"{self._id_attr(section_id)}>
         {cover_img}
         <h1>{title}</h1>
         {author_html}
         {publisher_html}
     </section>'''
 
-    def _generate_toc_html(self, toc: list[dict], chapters: list[dict]) -> str:
+    def _generate_toc_html(
+        self,
+        toc: list[dict],
+        chapters: list[dict],
+        section_id: str | None = None,
+    ) -> str:
         """Generate HTML table of contents with internal links."""
         if not toc:
             return ""
@@ -325,10 +345,23 @@ class PdfPlugin(Plugin):
         toc_items = "".join(f"<li>{render_item(item)}</li>" for item in toc)
 
         return f'''
-    <section class="toc-page">
+    <section class="toc-page"{self._id_attr(section_id)}>
         <h2>Table of Contents</h2>
         <ul>{toc_items}</ul>
     </section>'''
+
+    def _id_attr(self, section_id: str | None) -> str:
+        """Return an id attribute for a generated section, if it has an id."""
+        return f' id="{self._escape_html(section_id)}"' if section_id else ""
+
+    def _front_matter_kind(self, body: str) -> str | None:
+        """Return "cover" or "toc" if the chapter body is the book's own cover or contents page."""
+        match = re.search(
+            r'<[a-z]+\b[^>]*\b(?:epub:type|data-type)=["\'](cover|toc)["\']',
+            body[:500],
+            re.IGNORECASE,
+        )
+        return match.group(1).lower() if match else None
 
     def _extract_chapter_body(
         self,
