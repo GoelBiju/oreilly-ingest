@@ -169,6 +169,8 @@ class PdfPlugin(Plugin):
         print_css = self._get_print_css()
         original_css = self._load_css_files(oebps, css_files)
 
+        author_meta = self._author_meta_html(book_info)
+
         pdf_paths = []
 
         for i, chapter in enumerate(chapters):
@@ -189,6 +191,7 @@ class PdfPlugin(Plugin):
 <head>
     <meta charset="utf-8">
     <title>{chapter_title}</title>
+    {author_meta}
     <style>{print_css}</style>
     <style>{original_css}</style>
 </head>
@@ -286,6 +289,7 @@ class PdfPlugin(Plugin):
 <head>
     <meta charset="utf-8">
     <title>{title}</title>
+    {self._author_meta_html(book_info)}
     <style>{print_css}</style>
     <style>{original_css}</style>
 </head>
@@ -357,6 +361,13 @@ class PdfPlugin(Plugin):
             return True
         shorter, longer = sorted((heading, title), key=len)
         return len(shorter) >= 4 and shorter in longer
+
+    def _author_meta_html(self, book_info: dict) -> str:
+        """Return the <meta> tag that sets the PDF's author, if the book has authors."""
+        authors = ", ".join(book_info.get("authors") or [])
+        if not authors:
+            return ""
+        return f'<meta name="author" content="{self._escape_html(authors)}">'
 
     def _generate_cover_html(
         self,
