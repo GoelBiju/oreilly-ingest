@@ -3,6 +3,7 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
     fonts-liberation fonts-dejavu-core fonts-noto-cjk fonts-noto-core \
+    fonts-urw-base35 fonts-inconsolata \
     && rm -rf /var/lib/apt/lists/*
 
 # Ubuntu Mono is the code font O'Reilly stylesheets ask for. Debian does not
