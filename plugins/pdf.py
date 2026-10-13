@@ -517,6 +517,10 @@ class PdfPlugin(Plugin):
             return url
         path, _, fragment = url.partition("#")
         target = posixpath.normpath(posixpath.join(from_dir, unquote(path)))
+        # Links with a fragment keep their original ".html" extension (e.g.
+        # footnotes as "ch01.html#id123"), while chapters are stored as .xhtml.
+        if target not in link_targets and target.endswith(".html"):
+            target = f"{target[:-5]}.xhtml"
         # A relative link to a file outside this document (e.g. another chapter
         # when generating one PDF per chapter) would become a file:// URL.
         if target not in link_targets:
