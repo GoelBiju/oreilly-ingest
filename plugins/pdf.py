@@ -395,8 +395,10 @@ class PdfPlugin(Plugin):
             return url
         path, _, fragment = url.partition("#")
         target = posixpath.normpath(posixpath.join(from_dir, unquote(path)))
+        # A relative link to a file outside this document (e.g. another chapter
+        # when generating one PDF per chapter) would become a file:// URL.
         if target not in link_targets:
-            return url
+            return None
         return f"#{fragment or link_targets[target]}"
 
     def _rebase_url(self, url: str, from_dir: str) -> str:
