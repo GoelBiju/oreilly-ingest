@@ -723,7 +723,8 @@ class PdfPlugin(Plugin):
 sup a, sub a {
     display: inline-block !important;
     line-height: 1 !important;
-    margin: -0.25em 0 !important;
+    margin: -0.5em 0 !important;
+    text-indent: 0 !important;
 }
 img { max-width: 100%; height: auto; }
 figure { page-break-inside: avoid; }
